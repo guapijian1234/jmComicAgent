@@ -1,8 +1,18 @@
 import { app, BrowserWindow, shell, session, protocol, net } from 'electron'
 import { join, resolve as pathResolve } from 'path'
 import { pathToFileURL } from 'url'
+import { execFileSync } from 'child_process'
 import { registerIpcHandlers } from './ipc-handlers'
 import { setMainWindow } from './windowRef'
+import { startLanServer } from './LanServer'
+
+// Windows zh-CN consoles default to the OEM codepage (GBK/936), so Chinese in
+// console.log shows as mojibake. Pin the console to UTF-8 (65001) at startup.
+// Best-effort: silently skipped when the process has no attached console
+// (e.g. packaged GUI app launched by double-click — no console to read anyway).
+if (process.platform === 'win32') {
+  try { execFileSync('chcp.com', ['65001'], { stdio: 'ignore', shell: false }) } catch { /* no console */ }
+}
 
 const isMac = process.platform === 'darwin'
 
@@ -108,6 +118,7 @@ app.whenReady().then(async () => {
   })
 
   registerIpcHandlers(() => mainWindow)
+  startLanServer()
   createWindow()
 
   app.on('activate', () => {

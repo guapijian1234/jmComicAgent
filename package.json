@@ -1,19 +1,27 @@
 {
   "name": "jmcomic-agent",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "macOS-style comic reading Agent desktop app",
   "main": "./out/main/index.js",
   "scripts": {
     "dev": "electron-vite dev",
     "build": "electron-vite build",
     "preview": "electron-vite preview",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "mobile:build": "electron-vite build && npx cap copy",
+    "mobile:add": "npx cap add android",
+    "mobile:open": "npx cap open android",
+    "mobile:sync": "npx cap sync"
   },
   "dependencies": {
+    "@capacitor/android": "^8.4.0",
+    "@capacitor/core": "^8.4.0",
     "@fontsource/jetbrains-mono": "^5.2.8",
+    "cors": "^2.8.6",
     "dexie": "^4.4.3",
     "dexie-react-hooks": "^4.4.0",
     "electron-store": "^10.1.0",
+    "express": "^5.2.1",
     "framer-motion": "^12.40.0",
     "jotai": "^2.11.0",
     "openai": "^6.9.0",
@@ -22,7 +30,10 @@
     "remark-gfm": "^4.0.1"
   },
   "devDependencies": {
+    "@capacitor/cli": "^8.4.0",
     "@tailwindcss/postcss": "^4.0.0",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
     "@types/node": "^22.10.0",
     "@vitejs/plugin-react": "^4.7.0",
     "autoprefixer": "^10.4.0",

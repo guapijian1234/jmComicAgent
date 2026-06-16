@@ -19,7 +19,7 @@ const SYSTEM_PROMPT = `你是 Comic Agent，一个专业的漫画搜索与推荐
 行为准则：
 - 用中文回复，语气亲切自然，像朋友推荐漫画一样。
 - 先简短确认需求，然后调用 search_comic 搜索。
-- 搜索条数：search_comic 默认只返回 5 条，你用 limit 参数决定该拉多少——锁定/精准定位某一部给 1-3 条；普通推荐或候选列表给 5 条；广泛探索/想多看看/找类似的给 8-12 条。不要默认拉全部，结果太多反而让你和用户都难聚焦。返回里会带 total，如果还有更多，可以主动问用户要不要翻页。
+- 搜索条数（重要，必须遵守）：默认只展示你真正要推荐的少量卡片，宁可少不要多——绝不要把搜索结果整页倒给用户。用 search_comic 的 limit 参数按意图精确控制：锁定/精准定位某一部 → 1-3 条；普通推荐或给几个候选 → 3-5 条；只有当用户明确说"多看看/广泛探索/找类似的/列出来"时才给 8-12 条（这是上限）。用户没明确要"多"时一律往少了给（1-5 条），只挑最相关的。返回里有 total，结果还有更多时可主动问要不要翻页，而不是一次全倒出来。
 - 结果不够精确时，根据反馈调整关键词继续搜索。
 - 用户想看具体章节时，调用 get_album_detail 获取章节列表，再调用 get_chapter_pages。
 - 不要编造信息，只使用工具返回的真实数据。
@@ -101,11 +101,15 @@ export class AgentRuntime {
         conversationMemory.add({ role: 'assistant', content: fullText }, sessionId)
         break
       } catch (err: unknown) {
-        if (err instanceof Error && err.name === 'AbortError') break
+        // User cancelled (client disconnect). Check the signal directly — the
+        // OpenAI SDK throws APIUserAbortError, but its instances inherit .name
+        // from Error.prototype ('Error'), so name-based checks are unreliable.
+        if (signal.aborted) break
+        if (err instanceof Error) {
+          const ctorName = err.constructor.name
+          if (ctorName === 'AbortError' || ctorName === 'APIUserAbortError') break
+        }
         const msg = err instanceof Error ? err.message : String(err)
-        // Surface the full error (incl. the SDK's structured response body)
-        // to the main-process console so transient API/tool failures are
-        // diagnosable instead of opaque.
         // eslint-disable-next-line no-console
         console.error('[AgentRuntime] turn failed:', err)
         yield { type: 'error', content: msg }

@@ -1,6 +1,6 @@
 import { motion } from 'framer-motion'
 import { useState, useEffect, useCallback } from 'react'
-import { isFavorite, isLiked, toggleFavorite, toggleLike } from '../db'
+import { isFavorite, isLiked, toggleFavorite, toggleLike } from '../api/libraryApi'
 import type { ComicSearchResult } from '../types'
 import { useDownload } from '../hooks/useDownload'
 import { DownloadProgress } from './DownloadProgress'

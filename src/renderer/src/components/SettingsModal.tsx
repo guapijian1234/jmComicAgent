@@ -20,6 +20,8 @@ export function SettingsModal() {
   const [model, setModel] = useState(DEFAULTS.deepseekModel)
   const [showKey, setShowKey] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [lanUrls, setLanUrls] = useState<string[]>([])
+  const [lanPort, setLanPort] = useState(0)
 
   // Hydrate from the config store each time the modal opens.
   useEffect(() => {
@@ -31,6 +33,16 @@ export function SettingsModal() {
       setBaseUrl(String(cfg.baseUrl ?? DEFAULTS.baseUrl))
       setModel(String(cfg.deepseekModel ?? DEFAULTS.deepseekModel))
     })
+    // Fetch LAN server status
+    fetch('http://localhost:3456/api/status')
+      .then(r => r.json())
+      .then(d => {
+        if (!cancelled && d.urls) {
+          setLanUrls(d.urls as string[])
+          setLanPort(d.port as number)
+        }
+      })
+      .catch(() => setLanUrls([]))
     return () => { cancelled = true }
   }, [open])
 
@@ -148,6 +160,47 @@ export function SettingsModal() {
                 />
               </Field>
             </div>
+
+            {/* LAN Server status — shown when server is running */}
+            {lanUrls.length > 0 && (
+              <div
+                className="mt-5 pt-5 space-y-2"
+                style={{ borderTop: '1px solid var(--border-subtle)' }}
+              >
+                <label className="block text-[12px]" style={{ color: 'var(--text-secondary)' }}>
+                  局域网访问（手机扫码 / 输入地址）
+                </label>
+                {lanUrls.map((url) => (
+                  <div
+                    key={url}
+                    className="flex items-center gap-2 px-3 py-2 rounded-lg"
+                    style={{ background: 'var(--surface-1)', border: '1px solid var(--border-subtle)' }}
+                  >
+                    <span className="flex-shrink-0 w-2 h-2 rounded-full bg-green-400" />
+                    <code
+                      className="text-[12px] flex-1 select-all"
+                      style={{ color: 'var(--text-primary)', fontFamily: '"JetBrains Mono", monospace' }}
+                    >
+                      {url}
+                    </code>
+                    <button
+                      onClick={() => { navigator.clipboard.writeText(url); showToast({ message: '已复制', type: 'success' }) }}
+                      className="flex-shrink-0 flex items-center justify-center"
+                      style={{ width: 28, height: 28, borderRadius: 7, color: 'var(--text-tertiary)' }}
+                      title="复制地址"
+                    >
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                      </svg>
+                    </button>
+                  </div>
+                ))}
+                <p className="text-[11px]" style={{ color: 'var(--text-tertiary)' }}>
+                  确保手机和电脑在同一局域网，手机浏览器打开以上地址即可使用。
+                </p>
+              </div>
+            )}
 
             <div className="flex items-center justify-end gap-2 mt-6">
               <button

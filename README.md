@@ -1,11 +1,12 @@
 <div align="center">
 
-![Version](https://img.shields.io/badge/版本-1.0.0-blue?style=flat-square)
+![Version](https://img.shields.io/badge/版本-1.1.0-blue?style=flat-square)
 ![Electron](https://img.shields.io/badge/electron-33-47848F?style=flat-square&logo=electron&logoColor=white)
 ![React](https://img.shields.io/badge/react-19-61DAFB?style=flat-square&logo=react&logoColor=black)
 ![TypeScript](https://img.shields.io/badge/typescript-5.7-3178C6?style=flat-square&logo=typescript&logoColor=white)
 ![Tailwind](https://img.shields.io/badge/tailwind-4-06B6D4?style=flat-square&logo=tailwindcss&logoColor=white)
 ![Python](https://img.shields.io/badge/python-3-3776AB?style=flat-square&logo=python&logoColor=white)
+![Android](https://img.shields.io/badge/android-WebView-3DDC84?style=flat-square&logo=android&logoColor=white)
 ![License](https://img.shields.io/badge/license-MIT-yellow?style=flat-square)
 
 </div>
@@ -14,11 +15,11 @@
 
 # 🎨 jmComicAgent
 
-> **AI 驱动的漫画阅读桌面应用** —— 用自然语言对话搜漫、发现、阅读，包裹在精致的 macOS 风格界面中。
+> **AI 驱动的漫画阅读应用** —— 用自然语言对话搜漫、发现、阅读。桌面端 + 手机版，手机通过局域网串流到桌面端，包裹在精致的 macOS 风格界面中。
 
 <div align="center">
 
-### &nbsp;&nbsp;🔍 对话搜漫&nbsp;&nbsp;·&nbsp;&nbsp;🤖 AI 推荐&nbsp;&nbsp;·&nbsp;&nbsp;📖 卷轴 / 单页阅读&nbsp;&nbsp;·&nbsp;&nbsp;⬇️ 批量下载&nbsp;&nbsp;·&nbsp;&nbsp;📚 个人书架
+### &nbsp;&nbsp;🔍 对话搜漫&nbsp;&nbsp;·&nbsp;&nbsp;🤖 AI 推荐&nbsp;&nbsp;·&nbsp;&nbsp;📱 局域网串流到手机&nbsp;&nbsp;·&nbsp;&nbsp;📖 卷轴 / 单页阅读&nbsp;&nbsp;·&nbsp;&nbsp;⬇️ 批量下载&nbsp;&nbsp;·&nbsp;&nbsp;📚 个人书架
 
 </div>
 
@@ -31,6 +32,8 @@
 <td width="50%">
 
 - **💬 对话式搜漫** —— 用自然语言描述你想看的。试试「有没有校园恋爱喜剧？」「带悬疑标签的、女主是侦探的那种」—— AI 代理帮你找到。
+
+- **📱 局域网串流到手机** —— 桌面端启动后自动开一台局域网 HTTP 服务器，安卓手机装上 APK 即可自动发现并连上同一 WiFi 下的桌面端，把整套对话搜漫 / 阅读器 / 书架搬到手机。无需公网、无需账号。
 
 - **🎯 个性化推荐** —— 应用从你的收藏、点赞、阅读历史中学习口味。说「推荐几部我喜欢的那种」，它会交叉比对你的偏好画像和漫画库，告诉推荐理由。
 
@@ -178,6 +181,40 @@ npm run dev
 
 <br />
 
+## 📱 手机版（Android · 局域网串流）
+
+桌面端启动时会自动在同一局域网开一台 HTTP 服务器（默认端口 `3456`），手机端是一个 Capacitor + WebView 打包的安卓 APK：它扫描局域网找到桌面端，连上后把对话搜漫、卡片、阅读器、书架全部串流到手机。**AI 代理、Python jmcomic、图片解码都跑在桌面端**，手机只负责显示 —— 所以手机不需要装 Python、不需要配代理、不需要 API Key。
+
+### 工作方式
+
+1. 桌面端启动 → 自动开启局域网服务器，并尝试放行 Windows 防火墙（需管理员，失败时按提示执行一条 `netsh` 命令即可）。
+2. 手机连上**同一 WiFi** → 打开 APK → 自动扫描并连接（WebRTC + 子网扫描双重发现），连上后自动加载界面。
+3. 手机上的所有操作（对话、搜漫、阅读、收藏）都经 HTTP/SSE 走到桌面端，桌面端跑 agent + 解码图片后把结果回传手机。
+
+> 手机端 agent 流式回复走 **GET + Server-Sent Events**（`/api/agent/send`）—— 这是为 Android WebView 专门选的，POST 流式在部分 WebView 上收不到响应。漫画图片走 `/comic-img/<编码路径>`，服务端做了路径穿越防护 + dotfile 放行（`.jmcomic` 是隐藏目录）。
+
+### 构建 APK
+
+前置：[JDK 17+](https://adoptium.net/)、[Android SDK](https://developer.android.com/studio)、已按上面「快速开始」装好 Node/Python 依赖。
+
+```bash
+# 1. 编译 renderer 并把 web 资源同步进 android 工程
+npm run mobile:build        # = electron-vite build && npx cap copy
+
+# 2. 构建 debug APK（需 JAVA_HOME 指向 JDK）
+cd android
+export JAVA_HOME="/path/to/jdk-21"
+./gradlew assembleDebug
+
+# 产物：android/app/build/outputs/apk/debug/app-debug.apk
+```
+
+也可以 `npx cap open android` 用 Android Studio 打开后直接 Run / Build。装到手机后允许「未知来源」即可。
+
+> 想直接用？到 [Releases](https://github.com/guapijian1234/jmComicAgent/releases) 下载现成的 `app-debug.apk`，装上就能连。
+
+<br />
+
 ## ⌨️ 快捷键
 
 | 按键 | 作用 |
@@ -194,6 +231,8 @@ npm run dev
 |---|------|
 | **桌面壳** | Electron 33, electron-vite |
 | **前端** | React 19, TypeScript 5.7, Tailwind CSS 4 |
+| **手机端** | Capacitor（WebView 打包安卓 APK） |
+| **局域网服务** | 内置 Express HTTP/SSE 服务器（`/api/*`、`/comic-img/*`） |
 | **状态管理** | Jotai |
 | **动画** | Framer Motion |
 | **AI SDK** | OpenAI Node.js SDK（兼容 DeepSeek / OpenAI） |
@@ -211,7 +250,8 @@ npm run dev
 jmComicAgent/
 ├── src/
 │   ├── main/                    # Electron 主进程
-│   │   ├── index.ts             # 应用入口、窗口创建、comic-img:// 协议
+│   │   ├── index.ts             # 应用入口、窗口创建、comic-img:// 协议、控制台 UTF-8
+│   │   ├── LanServer.ts         # 局域网 HTTP/SSE 服务器（手机端连这里）
 │   │   ├── ipc-handlers.ts      # 所有 IPC 通道：agent、comic、config、download、window
 │   │   ├── PythonBridge.ts      # 调用 Python CLI，180s 超时，JSON 管道通信
 │   │   ├── ConfigStore.ts       # JSON 文件配置（API Key、模型、Base URL）
@@ -222,18 +262,21 @@ jmComicAgent/
 │   │       ├── ToolRegistry.ts  # 工具定义与执行注册表
 │   │       ├── ConversationMemory.ts # 对话上下文管理，原子化裁剪
 │   │       └── tools/
-│   │           └── register-tools.ts # search_comic、get_album_detail 等工具
+│   │           └── register-tools.ts # search_comic、get_album_detail 等工具（带结果数 cap）
 │   ├── preload/
 │   │   └── index.ts             # contextBridge 暴露 API：window.api
 │   └── renderer/
 │       ├── index.html           # 入口 HTML
 │       └── src/
-│           ├── App.tsx           # 根组件
-│           ├── components/       # ChatView、ReaderOverlay、Sidebar 等组件
+│           ├── App.tsx           # 根组件（HTTP 传输时先走 ServerConnect）
+│           ├── api/              # HTTP 传输层：httpClient（SSE/XHR）、boot、libraryApi
+│           ├── components/       # ChatView、ReaderOverlay、Sidebar、ServerConnect 等
 │           ├── atoms/            # Jotai 状态原子（设置、阅读器、侧边栏、Toast）
 │           ├── hooks/            # useAgent、useDownload
 │           ├── db/               # Dexie IndexedDB 表结构
 │           └── library/          # 用户偏好画像聚合
+├── android/                     # Capacitor 安卓工程（gradle + WebView 打包）
+├── capacitor.config.ts          # Capacitor 配置（允许局域网 cleartext）
 ├── scripts/
 │   └── jmcomic_cli.py           # Python CLI：search / album / chapter 三个子命令
 ├── package.json

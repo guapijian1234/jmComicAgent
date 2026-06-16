@@ -1,6 +1,6 @@
 import { atom } from 'jotai'
 import type { ChatMessage, ReaderState, ComicSearchResult, PageInfo, ChapterInfo, ReaderMode } from '../types'
-import { addHistory } from '../db'
+import { addHistory } from '../api/libraryApi'
 
 export const messagesAtom = atom<ChatMessage[]>([])
 export const inputAtom = atom('')

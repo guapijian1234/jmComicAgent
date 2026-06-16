@@ -2,11 +2,13 @@ import { toolRegistry } from '../ToolRegistry'
 import { pythonBridge } from '../../PythonBridge'
 import { getMainWindow } from '../../windowRef'
 
-/** Clamp the agent-supplied limit to a sane range (default 5, 1–30). */
+/** Clamp the agent-supplied limit to a sane range (default 5, 1–12).
+ *  Hard cap is deliberately low: jmcomic returns 80/page, and dumping a full
+ *  page of cards is exactly the "lists everything" behavior we want to avoid. */
 function resolveLimit(raw: unknown): number {
   const n = Number(raw)
   if (!Number.isFinite(n) || n <= 0) return 5
-  return Math.min(Math.max(Math.floor(n), 1), 30)
+  return Math.min(Math.max(Math.floor(n), 1), 12)
 }
 
 /**
@@ -34,7 +36,7 @@ export function registerTools() {
     {
       name: 'search_comic',
       description:
-        '按关键词搜索漫画。返回匹配列表：id、标题、作者、分类、封面URL。用 limit 控制返回条数（默认 5，上限 30）——按用户意图自己判断该给多少：锁定/精准定位某一部给 1-3 条；普通推荐或候选列表给 5 条；广泛探索/想多看看/找类似的给 8-12 条。不要默认返回全部，结果太多反而难聚焦。',
+        '按关键词搜索漫画。返回匹配列表：id、标题、作者、分类、封面URL。用 limit 控制返回条数（默认 5，上限 12）——按用户意图自己判断该给多少：锁定/精准定位某一部给 1-3 条；普通推荐或候选列表给 3-5 条；只有用户明确要"多看看/广泛探索/找类似的"才给 8-12 条。用户没明确要"多"时一律往少了给，不要默认返回一整页。',
       parameters: {
         type: 'object',
         properties: {

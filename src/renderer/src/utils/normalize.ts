@@ -104,8 +104,21 @@ export function normalizeChapterPages(raw: unknown): PageInfo[] {
   return result
 }
 
-/** Wrap a local decoded-image path in the comic-img:// protocol URL. */
+/** Wrap a local decoded-image path in the appropriate URL for the environment. */
 export function localPathToComicUrl(absPath: string): string {
+  const api = (window as any).api
+  if (api?._transport === 'http') {
+    // Dynamic import would be circular; read from global set by boot.ts
+    const base = (window as any).__jmServerUrl
+    if (base) return `${base}/comic-img/${encodeURIComponent(absPath)}`
+    // Fallback: derive from current page (works when served from LAN server)
+    if (window.location.protocol.startsWith('http')) {
+      return `/comic-img/${encodeURIComponent(absPath)}`
+    }
+    // Last resort: won't work in Capacitor without saved URL, but shouldn't
+    // happen — ServerConnect won't let the app render before saving a URL.
+    return ''
+  }
   return `comic-img://cache/${encodeURIComponent(absPath)}`
 }
 

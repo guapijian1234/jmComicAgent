@@ -5,9 +5,12 @@ import { sidebarOpenAtom, sidebarActiveTabAtom, closeSidebarAtom } from '../atom
 import type { SidebarTab as SidebarTabType } from '../atoms/sidebar'
 import { SidebarHandle, SIDEBAR_SPRING } from './SidebarHandle'
 import { SidebarTabView } from './SidebarTab'
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { db } from '../db'
+import { getFavorites, getLikes, getHistory } from '../api/libraryApi'
 import type { FavoriteRecord, LikeRecord, HistoryRecord, DownloadRecord } from '../db'
+
+const isHttp = ((window as any).api?._transport) === 'http'
 
 const SIDEBAR_WIDTH = 320
 const TABS: { key: SidebarTabType; icon: React.JSX.Element }[] = [
@@ -29,32 +32,43 @@ const TABS: { key: SidebarTabType; icon: React.JSX.Element }[] = [
   }
 ]
 
+// Local query via Dexie (Electron)
+function useLocalQuery<T>(querier: () => Promise<T>, deps: unknown[], initial: T): T {
+  return useLiveQuery(() => querier().catch(() => initial as T), deps, initial)
+}
+
+// Remote query via fetch (mobile/APK)
+function useRemoteQuery<T>(url: string, initial: T): T {
+  const [data, setData] = useState<T>(initial)
+  const refresh = () => {
+    fetch(url).then(r => r.json()).then(d => setData(Array.isArray(d) ? d as T : initial)).catch(() => {})
+  }
+  useEffect(refresh, [url])
+  return data
+}
+
 export function Sidebar() {
   const open = useAtomValue(sidebarOpenAtom)
   const activeTab = useAtomValue(sidebarActiveTabAtom)
   const setActiveTab = useSetAtom(sidebarActiveTabAtom)
   const closeSidebar = useSetAtom(closeSidebarAtom)
 
-  // Reactive lists: useLiveQuery re-runs whenever the matching table changes,
-  // so favoriting/liking a comic from anywhere is reflected here immediately.
-  // (Previously these were plain useState hydrated only on open/tab-change, so
-  //  a favorite toggled while the panel was open never appeared in the list.)
-  // Each querier swallows errors → [] so a DB hiccup can never blank the app.
-  const favorites = useLiveQuery(
-    () => db.favorites.orderBy('addedAt').reverse().toArray().catch(() => [] as FavoriteRecord[]),
-    [], []
-  )
-  const likes = useLiveQuery(
-    () => db.likes.orderBy('createdAt').reverse().toArray().catch(() => [] as LikeRecord[]),
-    [], []
-  )
-  const history = useLiveQuery(
-    () => db.history.orderBy('visitedAt').reverse().toArray().catch(() => [] as HistoryRecord[]),
-    [], []
-  )
-  const downloads = useLiveQuery(
+  const favorites = isHttp
+    ? useRemoteQuery<FavoriteRecord[]>(`${(window as any).__jmServerUrl || ''}/api/library/favorites`, [])
+    : useLocalQuery(() => db.favorites.orderBy('addedAt').reverse().toArray(), [], [] as FavoriteRecord[])
+
+  const likes = isHttp
+    ? useRemoteQuery<LikeRecord[]>(`${(window as any).__jmServerUrl || ''}/api/library/likes`, [])
+    : useLocalQuery(() => db.likes.orderBy('createdAt').reverse().toArray(), [], [] as LikeRecord[])
+
+  const history = isHttp
+    ? useRemoteQuery<HistoryRecord[]>(`${(window as any).__jmServerUrl || ''}/api/library/history`, [])
+    : useLocalQuery(() => db.history.orderBy('visitedAt').reverse().toArray(), [], [] as HistoryRecord[])
+
+  // Downloads are device-local (no sync needed)
+  const downloads = useLocalQuery(
     () => db.downloads.orderBy('startedAt').reverse().toArray().catch(() => [] as DownloadRecord[]),
-    [], []
+    [], [] as DownloadRecord[]
   )
 
   // Esc key closes sidebar

@@ -2,16 +2,48 @@ import { toolRegistry } from '../ToolRegistry'
 import { pythonBridge } from '../../PythonBridge'
 import { getMainWindow } from '../../windowRef'
 
+/** Clamp the agent-supplied limit to a sane range (default 5, 1–30). */
+function resolveLimit(raw: unknown): number {
+  const n = Number(raw)
+  if (!Number.isFinite(n) || n <= 0) return 5
+  return Math.min(Math.max(Math.floor(n), 1), 30)
+}
+
+/**
+ * Cap how many comic rows a search payload carries. jmcomic returns a
+ * `content` array (alongside a `total`), but we coerce common wrapper keys
+ * defensively so the cap holds regardless of shape. `total` is preserved so
+ * the agent can tell the user more results exist and offer to page forward.
+ */
+function limitSearchData(data: unknown, limit: number): unknown {
+  if (Array.isArray(data)) return data.slice(0, limit)
+  if (data && typeof data === 'object') {
+    const obj = data as Record<string, unknown>
+    const listKeys = ['content', 'results', 'data', 'list', 'comics', 'albums', 'search_result', 'photos']
+    for (const key of listKeys) {
+      if (Array.isArray(obj[key])) {
+        return { ...obj, [key]: (obj[key] as unknown[]).slice(0, limit) }
+      }
+    }
+  }
+  return data
+}
+
 export function registerTools() {
   toolRegistry.register(
     {
       name: 'search_comic',
-      description: '按关键词搜索漫画。返回匹配列表：id、标题、作者、分类、封面URL。',
+      description:
+        '按关键词搜索漫画。返回匹配列表：id、标题、作者、分类、封面URL。用 limit 控制返回条数（默认 5，上限 30）——按用户意图自己判断该给多少：锁定/精准定位某一部给 1-3 条；普通推荐或候选列表给 5 条；广泛探索/想多看看/找类似的给 8-12 条。不要默认返回全部，结果太多反而难聚焦。',
       parameters: {
         type: 'object',
         properties: {
           keyword: { type: 'string', description: '搜索关键词' },
           page: { type: 'string', description: '页码，默认 1' },
+          limit: {
+            type: 'number',
+            description: '返回的漫画条数，默认 5。精准定位给 1-3，普通推荐给 5，广泛探索给 8-12。'
+          }
         },
         required: ['keyword']
       }
@@ -19,7 +51,13 @@ export function registerTools() {
     async (params) => {
       const args = ['search', '-k', String(params.keyword)]
       if (params.page) args.push('--page', String(params.page))
-      return pythonBridge.run(args)
+      const result = await pythonBridge.run(args)
+      // Cap the result list before it reaches both the renderer (cards) and
+      // the next LLM turn (context), so the agent controls how much surfaces.
+      if (result.success) {
+        result.data = limitSearchData(result.data, resolveLimit(params.limit))
+      }
+      return result
     }
   )
 

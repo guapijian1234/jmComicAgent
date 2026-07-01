@@ -1,6 +1,9 @@
 import { motion, AnimatePresence } from 'framer-motion'
 import { useRef, useEffect } from 'react'
 import type { ChapterInfo } from '../types'
+import { isMobile } from '../utils/isMobile'
+
+const mobile = isMobile()
 
 /**
  * Custom glass-styled chapter dropdown (replaces the old button grid).
@@ -50,7 +53,7 @@ export function ChapterDropdown({
           <line x1="3" y1="12" x2="3.01" y2="12" />
           <line x1="3" y1="18" x2="3.01" y2="18" />
         </svg>
-        <span className="text-[12.5px] max-w-[180px] truncate" style={{ color: 'var(--text-secondary)' }}>
+        <span className={`text-[12.5px] truncate ${mobile ? 'max-w-[110px]' : 'max-w-[180px]'}`} style={{ color: 'var(--text-secondary)' }}>
           {currentTitle || '章节'}
         </span>
         <svg
@@ -71,8 +74,8 @@ export function ChapterDropdown({
             className="absolute z-50 glass-raised"
             style={{
               borderRadius: 12,
-              minWidth: 220,
-              maxWidth: 320,
+              minWidth: mobile ? 160 : 220,
+              maxWidth: mobile ? 260 : 320,
               maxHeight: 340,
               overflowY: 'auto',
               top: 'calc(100% + 8px)',

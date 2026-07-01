@@ -1,2 +1,6 @@
 /build/*
 !/build/.npmkeep
+
+# Release signing secrets — never commit
+jmcomic-release.keystore
+keystore.properties

@@ -7,11 +7,14 @@ import {
 } from '../atoms'
 import { useRef, useState, useCallback, useEffect } from 'react'
 import { normalizeChapters, normalizeChapterPages } from '../utils/normalize'
+import { isMobile } from '../utils/isMobile'
 import { ChapterDropdown } from './ChapterDropdown'
 import { SinglePageViewer } from './SinglePageViewer'
 import { StripViewer } from './StripViewer'
 import { ActionButtons } from './ActionButtons'
 import type { ReaderMode } from '../types'
+
+const mobile = isMobile()
 
 export function ReaderOverlay() {
   const reader = useAtomValue(readerAtom)
@@ -128,13 +131,13 @@ export function ReaderOverlay() {
       <div className="relative z-[1] flex flex-col h-full">
       {/* top bar */}
       <div
-        className="flex items-center justify-between px-5 py-3.5 drag-region"
+        className={`flex items-center justify-between drag-region ${mobile ? 'px-2.5 py-2' : 'px-5 py-3.5'}`}
         style={{ borderBottom: '1px solid var(--border-subtle)', background: 'rgba(20,20,23,0.4)' }}
       >
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 min-w-0">
           <button
             onClick={closeReader}
-            className="no-drag flex items-center gap-1.5 px-3 py-1.5 glass"
+            className="no-drag flex items-center gap-1.5 px-2.5 py-1.5 glass flex-shrink-0"
             style={{ borderRadius: 10 }}
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -163,15 +166,29 @@ export function ReaderOverlay() {
           )}
         </div>
 
-        <div className="text-center pointer-events-none flex-1 min-w-0">
-          <p className="text-[13.5px] font-medium truncate" style={{ color: 'var(--text-primary)' }}>
-            {reader.albumTitle}
-          </p>
-          <p className="text-[11px]" style={{ color: 'var(--text-tertiary)' }}>
-            {reader.chapterTitle ? `${reader.chapterTitle} · ` : ''}
-            {mode === 'single' ? `第 ${page + 1} / ${total || '?'} 页` : `${total || '?'} 页`}
-          </p>
-        </div>
+        {mobile ? (
+          /* On phones the album title is long and the bar is narrow — the
+             chapter picker already shows the chapter, so only the page index
+             belongs here. Keeping it off the bar frees the full width for the
+             back / actions / chapter / mode controls and stops the title from
+             wrapping and stealing vertical space from the page. */
+          <div className="text-center pointer-events-none flex-shrink-0 px-2">
+            <p className="text-[11px]" style={{ color: 'var(--text-tertiary)' }}>
+              {reader.chapterTitle ? `${reader.chapterTitle} · ` : ''}
+              {mode === 'single' ? `${page + 1}/${total || '?'}` : `${total || '?'}页`}
+            </p>
+          </div>
+        ) : (
+          <div className="text-center pointer-events-none flex-1 min-w-0">
+            <p className="text-[13.5px] font-medium truncate" style={{ color: 'var(--text-primary)' }}>
+              {reader.albumTitle}
+            </p>
+            <p className="text-[11px]" style={{ color: 'var(--text-tertiary)' }}>
+              {reader.chapterTitle ? `${reader.chapterTitle} · ` : ''}
+              {mode === 'single' ? `第 ${page + 1} / ${total || '?'} 页` : `${total || '?'} 页`}
+            </p>
+          </div>
+        )}
 
         <ModeToggle mode={mode} onChange={setMode} />
       </div>

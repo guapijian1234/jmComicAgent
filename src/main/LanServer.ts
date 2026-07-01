@@ -99,7 +99,8 @@ export function startLanServer(): Server | null {
   const norm = (p: string) => p.toLowerCase().replace(/\\/g, '/')
 
   app.get('/comic-img/{*encoded}', (req, res) => {
-    const target = path.resolve(decodeURIComponent(req.params.encoded))
+    const encoded = (req.params as Record<string, string>).encoded ?? ''
+    const target = path.resolve(decodeURIComponent(encoded))
     if (!fs.existsSync(target)) {
       return res.status(404).send('Not Found')
     }
@@ -269,6 +270,15 @@ export function startLanServer(): Server | null {
     res.json({ success: true })
   })
 
+  // Aggregated preference profile (top categories/tags/authors + raw lists)
+  // for the agent's personalized recommendations. The renderer computes it;
+  // the mobile client (no Electron window) reaches it over HTTP instead of
+  // via executeJavaScript.
+  app.get('/api/user-preferences', async (_req, res) => {
+    const data = await callRenderer('getUserPreferences')
+    res.json(data ?? { counts: { favorites: 0, likes: 0, history: 0 }, topCategories: [], topTags: [], topAuthors: [], favorites: [], likes: [], recentHistory: [] })
+  })
+
   // --- Download ---
   const activeDownloads = new Map<string, AbortController>()
 
@@ -393,7 +403,9 @@ export function startLanServer(): Server | null {
       // eslint-disable-next-line no-console
       console.log(`[LanServer] iface "${name}" ${skip ? 'SKIPPED' : 'KEPT'}`)
       if (skip) continue
-      for (const net of nets[name]) {
+      const ifaceNets = nets[name]
+      if (!ifaceNets) continue
+      for (const net of ifaceNets) {
         if (net.family === 'IPv4' && !net.internal) {
           const addr = net.address
           // eslint-disable-next-line no-console

@@ -8,36 +8,54 @@ export { conversationMemory } from './ConversationMemory'
 export { deepseekClient } from './DeepSeekClient'
 export type { Message, ToolCall, StreamChunk } from './DeepSeekClient'
 
-const SYSTEM_PROMPT = `你是 Comic Agent，一个专业的漫画搜索与推荐助手。用户用自然语言描述想看的漫画，你负责调用工具找到并展示它。
+const SYSTEM_PROMPT = `你是 Comic Agent，漫画搜索与推荐助手。用户用自然语言描述想看的漫画，你调用工具找到并展示。务必听清用户的指令再行动：用户指定了题材/分类/排序/数量就用那个，不要自作主张换掉。
 
-关于漫画卡片（重要）：
-- search_comic 的结果会自动渲染成漫画卡片（封面/标题/作者/分类/ID），你不用在文字里重复这些字段，给一句简短推荐语即可。
-- get_album_detail 的结果也会渲染成该漫画的卡片。
-- 你可以随时让漫画卡片出现，不必只在第一次搜索时：用户想看推荐、想换方向、想"再看看 / 列出来 / 有没有类似的"、或想聚焦某一部时，直接调用对应工具把卡片刷出来——列表用 search_comic，单部用 get_album_detail。
-- 不要只在文字里描述漫画却不调工具：卡片只有在工具返回后才会显示。
+【卡片渲染】
+- search_comic 与 get_album_detail 的返回会自动渲染成漫画卡片（封面/标题/作者/分类/ID），你不用在文字里复述这些字段，给一句简短推荐语即可。
+- 卡片只在工具返回后才会显示，所以想推荐就调工具，不要只在文字里描述却不调。
 
-行为准则：
-- 用中文回复，语气亲切自然，像朋友推荐漫画一样。
-- 先简短确认需求，然后调用 search_comic 搜索。
-- 搜索条数（重要，必须遵守）：默认只展示你真正要推荐的少量卡片，宁可少不要多——绝不要把搜索结果整页倒给用户。用 search_comic 的 limit 参数按意图精确控制：锁定/精准定位某一部 → 1-3 条；普通推荐或给几个候选 → 3-5 条；只有当用户明确说"多看看/广泛探索/找类似的/列出来"时才给 8-12 条（这是上限）。用户没明确要"多"时一律往少了给（1-5 条），只挑最相关的。返回里有 total，结果还有更多时可主动问要不要翻页，而不是一次全倒出来。
-- 结果不够精确时，根据反馈调整关键词继续搜索。
-- 用户想看具体章节时，调用 get_album_detail 获取章节列表，再调用 get_chapter_pages。
-- 不要编造信息，只使用工具返回的真实数据。
-- 没找到匹配时诚实告知，并建议换个关键词。
+【搜索质量——这是最关键的职责】
+- jmcomic 默认按"最新"(mr)排序，常常搜不到好作品。推荐/找好作品时，order_by 优先用 tr(评分) 或 tf(喜欢数)。
+- 一次搜索结果不理想是常态，不要只搜一次就放弃。没命中或质量差时：① 换更核心的关键词（去掉整句话，用漫画名/角色/题材词）；② 换 order_by；③ 按题材用 category 筛选（同人 doujin / 单本 single / 短篇 short / 韩漫 hanman 等）；④ 翻页(page)。至少尝试 1-2 次调整后再回答用户。
+- 关键词建议精炼：把"我想看那种兄妹之间的恋爱故事"提炼成"兄妹"或"兄妹 恋爱"再搜，而不是直接塞整句。
 
-个性化推荐（重要）：
-- 当用户说"推荐""猜我喜欢""根据我的口味/喜好推荐""有没有类似的"或想找与已收藏漫画相似的作品时，先调用 get_user_preferences 读取用户的收藏/喜欢/历史画像。
-- 拿到偏好后，用其中的高频分类、标签、作者作为关键词去 search_comic，给出贴合用户口味的推荐，并简要说明"为什么推荐"（关联到用户喜欢过的某部或某个高频标签）。
-- 如果用户库为空（没收藏/喜欢/历史），不要强行调用，直接按关键词正常推荐即可。`
+【不要重复——重要】
+- 系统会自动剔除本会话已经展示过的漫画（返回里若出现 _deduped 字段说明已剔重）。如果剔除后列表为空或太短，必须换关键词/排序/分类重新搜，绝不能把已展示过的再推一遍。
+- 不要反复发同一段话或同一批卡片。每个回合都要有新内容或新动作。
+
+【数量控制】
+- limit 按意图给：精准定位 1-3，普通推荐 3-6，只有用户明确要"多看看/广泛探索"才 8-12。宁可少不要多，绝不整页倒。
+
+【个性化推荐】
+- 用户说"推荐/猜我喜欢/根据口味/有没有类似的"时，先调 get_user_preferences 读收藏/喜欢/历史画像，再用其中的高频分类、标签、作者作关键词去 search_comic，并简述"为什么推荐"（关联到用户喜欢过的某部或标签）。库为空时跳过，直接按关键词推荐。
+
+【其它】
+- 用中文，语气亲切自然。不编造，只用工具真实返回的数据。没找到就如实说，并建议换词。
+- 用户要看章节时：get_album_detail 取章节列表 → get_chapter_pages 取图片。`
 
 export class AgentRuntime {
   private abortController: AbortController | null = null
+  /** Per-session set of album ids already shown to the user. Fed into
+   *  search_comic so it can strip repeats — the agent re-recommending the
+   *  same few titles across turns was the #1 "一直重复发" complaint. */
+  private shownAlbums = new Map<string, Set<string>>()
+
+  private shownSet(sessionId: string): Set<string> {
+    let s = this.shownAlbums.get(sessionId)
+    if (!s) {
+      s = new Set()
+      this.shownAlbums.set(sessionId, s)
+    }
+    return s
+  }
 
   async *run(userMessage: string, sessionId = 'default'): AsyncGenerator<AgentEvent> {
     this.abortController = new AbortController()
     const signal = this.abortController.signal
 
     conversationMemory.add({ role: 'user', content: userMessage }, sessionId)
+    const shown = this.shownSet(sessionId)
+    const toolCtx = { sessionId, shownAlbums: shown }
 
     const tools = toolRegistry.getDefinitions()
     let turn = 0
@@ -84,7 +102,7 @@ export class AgentRuntime {
 
             yield { type: 'tool_start', name: fn.name, params }
 
-            const result = await toolRegistry.execute(fn.name, params)
+            const result = await toolRegistry.execute(fn.name, params, toolCtx)
 
             yield { type: 'tool_end', name: fn.name, result }
 

@@ -1,10 +1,14 @@
 import { useRef, useState, useEffect } from 'react'
 import type { PageInfo } from '../types'
+import { isMobile } from '../utils/isMobile'
+
+const mobile = isMobile()
 
 const MIN_SCALE = 1
 const MAX_SCALE = 5
 const DRAG_THRESHOLD = 4 // px — sub-threshold motion counts as a click, not a drag
 const CLICK_DELAY = 200 // ms — wait for a possible double-click before flipping
+const SWIPE_THRESHOLD = 40 // px — horizontal travel to count as a page-turn swipe
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v))
 
@@ -56,6 +60,9 @@ export function SinglePageViewer({
   const movedRef = useRef(false)
   // pending flip timer, cancelled if a double-click follows the click
   const clickTimer = useRef<number | null>(null)
+  // On touch devices a tap also fires a synthesized mouse 'click' ~300ms
+  // later. The touch handler already flipped, so we suppress the duplicate.
+  const suppressClickRef = useRef(false)
 
   const measureImg = () => {
     const img = imgRef.current
@@ -158,6 +165,10 @@ export function SinglePageViewer({
   }
 
   const onClick = (e: React.MouseEvent) => {
+    if (suppressClickRef.current) {
+      suppressClickRef.current = false
+      return // a touch tap already handled the flip; ignore the synthesized click
+    }
     if (movedRef.current) {
       movedRef.current = false
       return // it was a pan, not a click-to-flip
@@ -182,14 +193,115 @@ export function SinglePageViewer({
     setView((v) => (v.scale > 1.001 ? { scale: 1, tx: 0, ty: 0 } : { scale: 2, tx: 0, ty: 0 }))
   }
 
+  // Touch gestures (mobile): two-finger pinch zoom; one-finger swipe to flip
+  // when at 1×, or pan when zoomed in. Mouse path (above) is untouched.
+  useEffect(() => {
+    if (!mobile) return
+    const el = stageRef.current
+    if (!el) return
+
+    let startTouch: { x: number; y: number; tx: number; ty: number; scale: number } | null = null
+    let pinchStart: { span: number; scale: number; cx: number; cy: number } | null = null
+    let moved = false
+
+    const dist = (t1: Touch, t2: Touch) => Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY)
+
+    const onTouchStart = (e: TouchEvent) => {
+      if (e.touches.length === 1) {
+        const v = viewRef.current
+        startTouch = { x: e.touches[0].clientX, y: e.touches[0].clientY, tx: v.tx, ty: v.ty, scale: v.scale }
+        moved = false
+      } else if (e.touches.length === 2) {
+        const rect = el.getBoundingClientRect()
+        pinchStart = {
+          span: dist(e.touches[0], e.touches[1]),
+          scale: viewRef.current.scale,
+          cx: (e.touches[0].clientX + e.touches[1].clientX) / 2 - (rect.left + rect.width / 2),
+          cy: (e.touches[0].clientY + e.touches[1].clientY) / 2 - (rect.top + rect.height / 2)
+        }
+        startTouch = null
+      }
+    }
+
+    const onTouchMove = (e: TouchEvent) => {
+      if (e.touches.length === 2 && pinchStart) {
+        e.preventDefault()
+        const d = dispRef.current
+        const span = dist(e.touches[0], e.touches[1])
+        const next = clamp(pinchStart.scale * (span / pinchStart.span), MIN_SCALE, MAX_SCALE)
+        // anchor the point under the pinch midpoint
+        const px = (pinchStart.cx - viewRef.current.tx) / viewRef.current.scale
+        const py = (pinchStart.cy - viewRef.current.ty) / viewRef.current.scale
+        const ow = Math.max(0, (d.w * next - el.clientWidth) / 2)
+        const oh = Math.max(0, (d.h * next - el.clientHeight) / 2)
+        setView({ scale: next, tx: clamp(pinchStart.cx - px * next, -ow, ow), ty: clamp(pinchStart.cy - py * next, -oh, oh) })
+        return
+      }
+      if (e.touches.length === 1 && startTouch) {
+        const dx = e.touches[0].clientX - startTouch.x
+        const dy = e.touches[0].clientY - startTouch.y
+        if (Math.abs(dx) + Math.abs(dy) > DRAG_THRESHOLD) moved = true
+        if (startTouch.scale > 1.001) {
+          // zoomed in: pan
+          e.preventDefault()
+          const d = dispRef.current
+          const ow = Math.max(0, (d.w * startTouch.scale - el.clientWidth) / 2)
+          const oh = Math.max(0, (d.h * startTouch.scale - el.clientHeight) / 2)
+          setView((v) => ({ ...v, tx: clamp(startTouch!.tx + dx, -ow, ow), ty: clamp(startTouch!.ty + dy, -oh, oh) }))
+        } else {
+          // at 1×: let the browser do nothing special; we flip on touchend
+        }
+      }
+    }
+
+    const onTouchEnd = (e: TouchEvent) => {
+      if (e.touches.length >= 1) {
+        // one finger lifted from a two-finger gesture — restart as single
+        if (e.touches.length === 1) {
+          const v = viewRef.current
+          startTouch = { x: e.touches[0].clientX, y: e.touches[0].clientY, tx: v.tx, ty: v.ty, scale: v.scale }
+          moved = false
+        }
+        pinchStart = null
+        return
+      }
+      // all fingers up
+      if (startTouch && !moved && startTouch.scale <= 1.001) {
+        // a tap (no drag, not zoomed) → flip by which half of the stage
+        const rect = el.getBoundingClientRect()
+        const target = startTouch.x < rect.left + rect.width / 2 ? page - 1 : page + 1
+        suppressClickRef.current = true
+        go(target)
+      } else if (startTouch && moved && startTouch.scale <= 1.001) {
+        // horizontal swipe at 1× → flip
+        const dx = (e.changedTouches[0]?.clientX ?? startTouch.x) - startTouch.x
+        if (Math.abs(dx) > SWIPE_THRESHOLD) {
+          suppressClickRef.current = true
+          go(dx < 0 ? page + 1 : page - 1)
+        }
+      }
+      startTouch = null
+      pinchStart = null
+    }
+
+    el.addEventListener('touchstart', onTouchStart, { passive: true })
+    el.addEventListener('touchmove', onTouchMove, { passive: false })
+    el.addEventListener('touchend', onTouchEnd, { passive: true })
+    return () => {
+      el.removeEventListener('touchstart', onTouchStart)
+      el.removeEventListener('touchmove', onTouchMove)
+      el.removeEventListener('touchend', onTouchEnd)
+    }
+  }, [page, go])
+
   const cursor = dragging ? 'grabbing' : view.scale > 1.001 ? 'grab' : 'default'
 
   return (
     <>
       <div
         ref={stageRef}
-        className="flex-1 flex items-center justify-center overflow-hidden p-6 min-h-0"
-        style={{ cursor }}
+        className={`flex-1 flex items-center justify-center overflow-hidden min-h-0 ${mobile ? 'p-2' : 'p-6'}`}
+        style={{ cursor, touchAction: 'none' }}
         onMouseDown={onMouseDown}
         onClick={onClick}
         onDoubleClick={onDoubleClick}

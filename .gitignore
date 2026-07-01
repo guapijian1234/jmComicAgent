@@ -5,3 +5,7 @@ dist/
 .DS_Store
 docs
 .superpowers
+
+# Android release signing secrets — never commit
+android/app/jmcomic-release.keystore
+android/app/keystore.properties

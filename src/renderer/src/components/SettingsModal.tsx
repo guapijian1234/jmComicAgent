@@ -3,6 +3,7 @@ import { useAtomValue, useSetAtom } from 'jotai'
 import { motion, AnimatePresence } from 'framer-motion'
 import { settingsOpenAtom, closeSettingsAtom } from '../atoms/settings'
 import { showToastAtom } from '../atoms/toast'
+import { QrCode } from './QrCode'
 
 const DEFAULTS = {
   deepseekApiKey: '',
@@ -164,40 +165,49 @@ export function SettingsModal() {
             {/* LAN Server status — shown when server is running */}
             {lanUrls.length > 0 && (
               <div
-                className="mt-5 pt-5 space-y-2"
+                className="mt-5 pt-5 space-y-3"
                 style={{ borderTop: '1px solid var(--border-subtle)' }}
               >
                 <label className="block text-[12px]" style={{ color: 'var(--text-secondary)' }}>
-                  局域网访问（手机扫码 / 输入地址）
+                  局域网访问（手机扫码直连）
                 </label>
-                {lanUrls.map((url) => (
-                  <div
-                    key={url}
-                    className="flex items-center gap-2 px-3 py-2 rounded-lg"
-                    style={{ background: 'var(--surface-1)', border: '1px solid var(--border-subtle)' }}
-                  >
-                    <span className="flex-shrink-0 w-2 h-2 rounded-full bg-green-400" />
-                    <code
-                      className="text-[12px] flex-1 select-all"
-                      style={{ color: 'var(--text-primary)', fontFamily: '"JetBrains Mono", monospace' }}
-                    >
-                      {url}
-                    </code>
-                    <button
-                      onClick={() => { navigator.clipboard.writeText(url); showToast({ message: '已复制', type: 'success' }) }}
-                      className="flex-shrink-0 flex items-center justify-center"
-                      style={{ width: 28, height: 28, borderRadius: 7, color: 'var(--text-tertiary)' }}
-                      title="复制地址"
-                    >
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
-                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-                      </svg>
-                    </button>
+                <div className="flex items-center gap-4">
+                  {/* QR of the first (primary) LAN url — scan with the phone's
+                      camera to open the app without typing IP:port. */}
+                  <div className="flex-shrink-0">
+                    <QrCode text={lanUrls[0]} size={140} />
                   </div>
-                ))}
+                  <div className="flex-1 min-w-0 space-y-2">
+                    {lanUrls.map((url) => (
+                      <div
+                        key={url}
+                        className="flex items-center gap-2 px-3 py-2 rounded-lg"
+                        style={{ background: 'var(--surface-1)', border: '1px solid var(--border-subtle)' }}
+                      >
+                        <span className="flex-shrink-0 w-2 h-2 rounded-full bg-green-400" />
+                        <code
+                          className="text-[11.5px] flex-1 select-all truncate"
+                          style={{ color: 'var(--text-primary)', fontFamily: '"JetBrains Mono", monospace' }}
+                        >
+                          {url}
+                        </code>
+                        <button
+                          onClick={() => { navigator.clipboard.writeText(url); showToast({ message: '已复制', type: 'success' }) }}
+                          className="flex-shrink-0 flex items-center justify-center"
+                          style={{ width: 28, height: 28, borderRadius: 7, color: 'var(--text-tertiary)' }}
+                          title="复制地址"
+                        >
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                          </svg>
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
                 <p className="text-[11px]" style={{ color: 'var(--text-tertiary)' }}>
-                  确保手机和电脑在同一局域网，手机浏览器打开以上地址即可使用。
+                  确保手机和电脑在同一局域网，手机相机扫描左侧二维码即可打开。
                 </p>
               </div>
             )}

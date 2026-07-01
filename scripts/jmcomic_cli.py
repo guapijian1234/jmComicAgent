@@ -31,7 +31,15 @@ def _build_option():
     # so omitted keys like download.image.suffix fall back to their defaults
     # instead of raising KeyError at download time.
     return JmOption.construct({
-        "dir_rule": {"rule": "Bd_Aid", "base_dir": workspace},
+        # dir_rule: Bd_Aid_Pid = base_dir / album_id / photo_id.
+        # The Pid segment is ESSENTIAL for multi-chapter albums. A jmcomic
+        # "album"'s id is the photo_id of its FIRST chapter, so every chapter
+        # shares the same Aid — without Pid, all chapters land in the same
+        # folder (base_dir/<aid>/00001.webp...) and overwrite each other, and
+        # with cache=True chapter 2+ silently re-reads chapter 1's images
+        # instead of downloading its own. That made every chapter on the phone
+        # (and desktop) display chapter 1's pages.
+        "dir_rule": {"rule": "Bd_Aid_Pid", "base_dir": workspace},
         # decode=True: JM page images are scrambled (horizontal segments
         # rearranged by an md5-derived count). The downloader fetches the
         # scrambled bytes and writes the DECODED image to disk — without this,
